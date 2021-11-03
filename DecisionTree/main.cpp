@@ -2,18 +2,25 @@
 
 using namespace std;
 
-const int N = 1001;
 const int maxDepth = 4;
 const int minSize = 1;
 const vector<char> s = {'L', 'R', 'B'};
+const int numberOfTree = 3;
+const vector<vector<int> > combination
+{ {1,2}, {1,3}, {1,4}, {2,3}, {2,4}, {3,4},
+  {1,2,3}, {1,2,4}, {2,3,4},
+  {1,2,3,4}
+};
+int indexTree = 9;
+vector< vector<char> > ans;
 struct Data {
     char y;
     float x[5];
 };
 
 struct nodeInfo {
+    bool isLeaf = 0;
     int id, value;
-    vector<Data> dataSet;
 };
 struct Node {
     Node* left;
@@ -24,10 +31,10 @@ struct Node {
 
 struct Tree
 {
-    Node* root;
+    Node* root = new Node;
 };
 vector<Data> trainSet, validSet;
-
+Tree T[numberOfTree+1], TrainSet;
 
 Data read(string s) {
     Data tmp;
@@ -91,10 +98,10 @@ vector< vector<Data> > splitGroups(int index, int value, vector<Data> dataSet) {
     return g;
 }
 
-nodeInfo getSplit(vector<Data> dataSet, Node* Node) {
+nodeInfo getSplit(vector<Data> dataSet, Node* Node, vector<Data> &left, vector<Data> &right) {
     float minGini = 1.0;
     nodeInfo tmp;
-    for(int index = 1; index <= 4; index++) {
+    for(auto index : combination[indexTree]) {
         for(auto row : dataSet) {
             vector< vector<Data> > groups = splitGroups(index, row.x[index], dataSet);
             float  gini = getGiniScore(groups, s);
@@ -102,12 +109,11 @@ nodeInfo getSplit(vector<Data> dataSet, Node* Node) {
                 minGini = gini;
                 tmp.id = index;
                 tmp.value = row.x[index];
-                ((Node->left)->nodeInfo).dataSet = groups[0];
-                ((Node->right)->nodeInfo).dataSet = groups[1];
+                left = groups[0];
+                right = groups[1];
             }
         }
     }
-//    cout << minGini << " " << tmp.id << " " << tmp.value << " " << "\n";
     return tmp;
 }
 
@@ -127,62 +133,154 @@ char toTerminal(vector<Data> group) {
 void splitTree(Node* Node, vector<Data> dataSet, int depth) {
     (Node->left) = new struct Node;
     Node->right = new struct Node;
-    Node->nodeInfo = getSplit(dataSet, Node);
-    vector<Data> left = ((Node->left)->nodeInfo).dataSet;
-    vector<Data> right = ((Node->right)->nodeInfo).dataSet;
+    vector<Data> left;
+    vector<Data> right;
+    Node->nodeInfo = getSplit(dataSet, Node, left, right);
 //    cout << left.size() << " " << right.size() << "\n" ;
     if(left.size() == 0 || right.size() == 0) {
         vector<Data> v;
         v.insert(v.begin(), left.begin(), left.end());
         v.insert(v.end(), right.begin(), right.end());
-        ((Node->left))->ans = ((Node->right))->ans = toTerminal(v);
+        char tmp = toTerminal(v);
+        ((Node->right))->ans = tmp;
+        ((Node->right)->nodeInfo).isLeaf = 1;
+        ((Node->left))->ans = tmp;
+        ((Node->left))->nodeInfo.isLeaf = 1;
         left.clear();
         right.clear();
         v.clear();
         return ;
     }
     if(depth >= maxDepth) {
-        ((Node->left))->ans = toTerminal(left);
-        ((Node->right))->ans = toTerminal(right);
+        (Node->left)->ans = toTerminal(left);
+        ((Node->left)->nodeInfo).isLeaf = 1;
+        (Node->right)->ans = toTerminal(right);
+        ((Node->right)->nodeInfo).isLeaf = 1;
         left.clear();
         right.clear();
         return;
     }
     if(left.size() <= minSize) {
-        ((Node->left))->ans = toTerminal(left);
+        (Node->left)->ans = toTerminal(left);
+        ((Node->left)->nodeInfo).isLeaf = 1;
     }
     else{
         splitTree(Node->left, left, depth+1);
     }
     if(right.size() <= minSize) {
-        ((Node->right))->ans = toTerminal(right);
+        (Node->right)->ans = toTerminal(right);
+        ((Node->right)->nodeInfo).isLeaf = 1;
     }
     else{
         splitTree(Node->right, right, depth+1);
     }
+    return;
 }
 void printTree(Node* Node, int depth) {
-    if(depth > maxDepth || Node == NULL) return;
-    cout << (Node->nodeInfo).value << "\n" ;
+//    cout << (Node->nodeInfo).dataSet.size() << "\n";
+    if(depth > maxDepth || Node == NULL || (Node->nodeInfo).isLeaf) return;
+//    cout << depth << " " << Node << " " << Node->left << " " << Node->right << "\n" ;
     if(Node->left != NULL)
         printTree(Node->left, depth+1);
     if(Node->right != NULL)
         printTree(Node->right, depth+1);
 }
-void buildTree() {
-    Node* root = new Node;
-    splitTree(root, trainSet, 1);
-    printTree(root, 1);
+char predict(Node* Node, Data row) {
+    if(row.x[(Node->nodeInfo.id)] < Node->nodeInfo.value) {
+        if((Node->left)->nodeInfo.isLeaf)
+            return (Node->left)->ans;
+        else
+            return predict(Node->left, row);
+    }
+    else {
+        if((Node->right)->nodeInfo.isLeaf)
+            return (Node->right)->ans;
+        else
+            return predict(Node->right, row);
+    }
+}
+void buildTree(Node* root, vector<Data> _trainSet) {
+    splitTree(root, _trainSet, 1);
+//    printTree(root, 1);
+    int cnt = 0;
+    for(auto test : validSet) {
+        char tmp = predict(root, test);
+        ans[cnt].push_back(tmp);
+        if(indexTree == 9)
+        {
+            ans[cnt].push_back(tmp);
+        }
+        cnt++;
+//        if(predict(root, test) == test.y) cnt++;
+    }
+
+//    cout << "Percent: " << (float)cnt / validSet.size() * 100 << "%";
+}
+void RandomData(vector<Data> &trainSample) {
+    int trainSize = trainSet.size();
+    srand(time(NULL));
+    for(int i = 0; i < trainSize; i++)
+    {
+        int index = rand() % trainSize;
+        trainSample.push_back(trainSet[index]);
+    }
+    indexTree = rand()%9;
+//    indexTree--;
+
+}
+void RandomForest() {
+    vector<Data> trainSample;
+    for(int i = 1; i <= numberOfTree; i++) {
+        RandomData(trainSample);
+        buildTree(T[i].root, trainSample);
+    }
+}
+void printAns() {
+    int cnt[100];
+    int accurancy = 0;
+    for(int i = 0; i < validSet.size(); i++) {
+        cnt['L'] = 0;
+        cnt['R'] = 0;
+        cnt['B'] = 0;
+        cout << validSet[i].y << " ";
+        for(auto tmp : ans[i])
+        {
+            cnt[tmp]++;
+            cout << tmp << " ";
+        }
+        cout << "\n";
+        if(cnt['L'] >= cnt['R'] && cnt['L'] >= cnt['B'])
+            if('L' == validSet[i].y)
+                accurancy++;
+        if(cnt['R'] >= cnt['L'] && cnt['R'] >= cnt['B'])
+            if('R' == validSet[i].y)
+                accurancy++;
+        if(cnt['B'] >= cnt['R'] && cnt['B'] >= cnt['B'])
+            if('B' == validSet[i].y)
+                accurancy++;
+    }
+    cout << "Accurancy :" << (float)accurancy / validSet.size() * 100 << "%";
 }
 int main()
 {
-    freopen("inp_test.txt", "r", stdin);
-    freopen("test.txt", "w", stdout);
+    ifstream inFile1, inFile2;
+    ofstream outFile;
     string s;
-    while(getline(cin, s)) {
+    outFile.open("test.txt");
+    inFile1.open("train.txt", ios::in);
+    inFile2.open("valid.txt", ios::in);
+    while(getline(inFile1, s)) {
         Data inp = read(s);
         trainSet.push_back(inp);
     }
-    buildTree();
+    while(getline(inFile2, s)) {
+        Data inp = read(s);
+        validSet.push_back(inp);
+    }
+    for(int i = 0; i < validSet.size(); i++)
+    ans.push_back(vector<char>());
+    buildTree(TrainSet.root, trainSet);
+    RandomForest();
+    printAns();
     return 0;
 }
