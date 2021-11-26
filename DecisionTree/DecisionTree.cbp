@@ -35,6 +35,8 @@
 		<Unit filename="inp_test.txt" />
 		<Unit filename="main.cpp" />
 		<Unit filename="test.txt" />
+		<Unit filename="train.txt" />
+		<Unit filename="valid.txt" />
 		<Extensions>
 			<code_completion />
 			<envvars />
